@@ -162,7 +162,8 @@ public class Main {
             } else switch (nullToEmpty(schema.type)) {
                 case "": pType = TypeName.VOID.box(); break;
                 case "string": pType = TypeName.get(String.class); break;
-                case "integer": pType = TypeName.get(Number.class); break;
+                case "boolean": pType = TypeName.get(boolean.class); break;
+                case "integer": pType = schema.format.equals("int64")? TypeName.get(long.class) : TypeName.get(int.class); break;
                 case "number": pType = TypeName.get(Number.class); break;
                 case "array": pType = arrayType.wrap(type(schema.items)); break;
             }

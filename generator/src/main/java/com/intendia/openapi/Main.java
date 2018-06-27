@@ -186,7 +186,8 @@ public class Main {
             } else switch (nullToEmpty(schema.type)) {
                 case "": pType = TypeName.VOID.box(); break;
                 case "string": pType = TypeName.get(String.class); break;
-                case "integer": pType = TypeName.get(Number.class); break;
+                case "boolean": pType = TypeName.get(boolean.class); break;
+                case "integer": pType = schema.format.equals("int64")? TypeName.get(long.class) : TypeName.get(int.class); break;
                 case "number": pType = TypeName.get(Number.class); break;
                 case "array": pType = arrayType.wrap(type(schema.items)); break;
             }
@@ -239,11 +240,10 @@ public class Main {
     private static TypeSpec openApi2JaxRs(ClassName api, OpenApi.Doc doc) throws IOException {
         log.info(doc.info.title);
 
-        //Map<String, OpenApi.Tag> tags = Stream.of(doc.tags).collect(toMap(t -> t.name, identity()));
         Map<String, OpenApi.Parameter> parameters = firstNonNull(doc.parameters, emptyMap());
         TypeResolver resolver = new TypeResolver();
         if (doc.definitions != null) doc.definitions.entrySet()
-                .forEach(e -> resolver.put("#/definitions/" + e.getKey(), api.nestedClass(e.getKey()), e.getValue()));
+                .forEach(e -> resolver.put("#/definitions/" + e.getKey(), api.nestedClass(capitalizeFirstLetter(e.getKey())), e.getValue()));
         checkUnsupportedSchemaUsage(doc);
 
         doc.paths.entrySet().forEach(path -> path.getValue().operations().entrySet().forEach(oe -> {
@@ -336,4 +336,12 @@ public class Main {
         if (path.endsWith("/")) path = path.substring(0, path.length() - 1);
         return path;
     }
+
+    public static String capitalizeFirstLetter(String original) {
+        if (original == null || original.length() == 0) {
+            return original;
+        }
+        return original.substring(0, 1).toUpperCase() + original.substring(1);
+    }
+
 }

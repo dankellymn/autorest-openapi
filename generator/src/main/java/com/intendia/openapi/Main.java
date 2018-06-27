@@ -14,7 +14,7 @@ import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 import com.google.gson.Gson;
 import com.squareup.javapoet.AnnotationSpec;
-import com.squareup.javapoet.ArrayTypeName;
+import com.squareup.javapoet.ArrayTypeName; 
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URLConnection;
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -55,30 +56,32 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Observable<SpecData> spec$ = null;
         if (args.length != 1) { help(); return; }
-        if (args[0].equalsIgnoreCase("all")) spec$ = fetchAllSpecs(APIS_GURU);
-        if (args[0].contains("@")) spec$ = fetchSpec(APIS_GURU, SpecData.valueOf(args[0]));
         if (args[0].contains(":")) spec$ = loadSpec(args[0]);
-        if (spec$ == null) { help(); return; }
+        else if (args[0].equalsIgnoreCase("all")) spec$ = fetchAllSpecs(APIS_GURU);
+        else if (args[0].contains("@")) spec$ = fetchSpec(APIS_GURU, SpecData.valueOf(args[0]));
+        else if (spec$ == null) { help(); return; }
 
         spec$.subscribe(Main::generate);
     }
 
     private static void help() {
         // eg 'thetvdb.com@2.1.1', or '~/Code/petstore.json'
-        System.out.println("gen [all|<api>@<version>|<uri>]");
+        System.out.println("[all|<api>@<version>|[<api>@]<uri>]");
         System.out.println("all - fetch and generates all available APIs in https://api.apis.guru/");
         System.out.println("<api>@<version> - fetch and generate the specified api/version");
         System.out.println("    All available APIs here: https://api.apis.guru/v2/list.json");
+        System.out.println("<api>@<uri> - generate code for the specified openapi json
+        System.out.println("    api is the package name, uri should start with '<scheme>:'");
         System.out.println("<uri> - generate code for the specified openapi json, uri should start with '<scheme>:'");
         System.out.println();
         System.out.println("Examples:");
-        System.out.println("gen file:///Users/ibaca/Code/petstore.json");
-        System.out.println("gen http://petstore.swagger.io/v2/swagger.json");
+        System.out.println(" file:///Users/ibaca/Code/petstore.json");
+        System.out.println(" http://petstore.swagger.io/v2/swagger.json");
     }
 
     private static void generate(SpecData spec) {
         try {
-            ClassName jaxRsTypeName = ClassName.get(spec.name.replace(".", "_"), "Api");
+            ClassName jaxRsTypeName = ClassName.get(spec.name, "Api");
             TypeSpec jaxRsTypeSpec = openApi2JaxRs(jaxRsTypeName, spec.doc);
             JavaFile jaxRsFile = JavaFile.builder(jaxRsTypeName.packageName(), jaxRsTypeSpec).build();
             jaxRsFile.writeTo(Paths.get("target"));
@@ -111,9 +114,20 @@ public class Main {
     }
 
     private static Observable<SpecData> loadSpec(String uri) {
-        try (JsonConnection ctx = new JsonConnection((HttpURLConnection) new URI(uri).toURL().openConnection());
+        String apiName = "api";
+        if(uri.contains("@"))
+        {
+            String split[] = uri.split("@");
+            if(split.length == 2)
+            {
+                apiName = split[0];
+                uri = split[1];
+            }
+        }
+    
+        try (JsonConnection ctx = new JsonConnection(new URI(uri).toURL().openConnection());
                 InputStream inputStream = ctx.connection.getInputStream()) {
-            SpecData spec = new SpecData("api", "0");
+            SpecData spec = new SpecData(apiName, "0");
             spec.doc = new Gson().fromJson(new InputStreamReader(inputStream), OpenApi.Doc.class);
             return Observable.just(spec);
         } catch (Exception e) {
@@ -122,12 +136,12 @@ public class Main {
     }
 
     static class JsonConnection implements AutoCloseable {
-        final HttpURLConnection connection;
-        JsonConnection(HttpURLConnection connection) {
+        final URLConnection connection;
+        JsonConnection(URLConnection connection) {
             this.connection = connection;
             connection.setRequestProperty("Accept", "application/json");
         }
-        @Override public void close() { connection.disconnect(); }
+        @Override public void close() { if(connection instanceof HttpURLConnection) { ((HttpURLConnection)connection).disconnect(); } }
     }
 
     static boolean isObject(OpenApi.Schema schema) { return schema != null && "object".equals(schema.type); }
@@ -194,15 +208,29 @@ public class Main {
                         .addMember("name","$S", "Object")
                         .build());
                 out.addJavadoc("$L\n\n<pre>$L</pre>\n", firstNonNull(emptyToNull(schema.description), name), schema);
-                schema.properties.entrySet().forEach(e -> {
-                    String paramName = e.getKey();
-                    OpenApi.Schema paramSchema = e.getValue();
-                    String description = firstNonNull(emptyToNull(paramSchema.description), paramName);
-                    TypeName paramType = TypeResolver.this.type(paramSchema);
-                    out.addField(FieldSpec.builder(paramType, paramName, Modifier.PUBLIC)
-                            .addJavadoc("$L\n\n<pre>$L</pre>\n", description, paramSchema)
-                            .build());
-                });
+                if(schema != null)
+                {
+                	if(schema.properties != null)
+                	{
+		                schema.properties.entrySet().forEach(e -> {
+		                    String paramName = e.getKey();
+		                    OpenApi.Schema paramSchema = e.getValue();
+		                    String description = firstNonNull(emptyToNull(paramSchema.description), paramName);
+		                    TypeName paramType = TypeResolver.this.type(paramSchema);
+		                    out.addField(FieldSpec.builder(paramType, paramName, Modifier.PUBLIC)
+		                            .addJavadoc("$L\n\n<pre>$L</pre>\n", description, paramSchema)
+		                            .build());
+		                });
+	                }
+	                else
+	                {
+	                	System.out.println("Null properties for "+name);
+	                }
+	            }
+	            else
+	            {
+	            	System.out.println("Null schema for "+name);
+	            }
                 return out.build();
             }
         }

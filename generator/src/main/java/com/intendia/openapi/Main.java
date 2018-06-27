@@ -13,6 +13,7 @@ import static java.util.stream.Collectors.toMap;
 import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 import com.google.gson.Gson;
+import com.intendia.gwt.autorest.client.AutoRestGwt;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ArrayTypeName; 
 import com.squareup.javapoet.ClassName;
@@ -252,8 +253,9 @@ public class Main {
         }));
         return TypeSpec.interfaceBuilder(api)
                 .addModifiers(Modifier.PUBLIC)
+                .addAnnotation(AutoRestGwt.class)
                 .addAnnotation(annotation(SuppressWarnings.class, "unused"))
-                .addAnnotation(annotation(Path.class, doc.basePath))
+                .addAnnotation(annotation(Path.class, (doc.basePath != null) ? doc.basePath : "/"))
                 .addTypes(() -> resolver.types.values().stream().map(TypeResolver.Def::type).iterator())
                 .addMethods(() -> doc.paths.entrySet().stream()
                         .flatMap(pathEntry -> pathEntry.getValue().operations().entrySet().stream().map(operation -> {

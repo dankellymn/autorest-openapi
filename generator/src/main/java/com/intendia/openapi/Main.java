@@ -70,7 +70,7 @@ public class Main {
         System.out.println("all - fetch and generates all available APIs in https://api.apis.guru/");
         System.out.println("<api>@<version> - fetch and generate the specified api/version");
         System.out.println("    All available APIs here: https://api.apis.guru/v2/list.json");
-        System.out.println("<api>@<uri> - generate code for the specified openapi json
+        System.out.println("<api>@<uri> - generate code for the specified openapi json");
         System.out.println("    api is the package name, uri should start with '<scheme>:'");
         System.out.println("<uri> - generate code for the specified openapi json, uri should start with '<scheme>:'");
         System.out.println();

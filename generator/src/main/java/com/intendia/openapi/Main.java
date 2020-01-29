@@ -17,6 +17,7 @@ import com.intendia.gwt.autorest.client.Security;
 import com.intendia.gwt.autorest.client.SecurityDefinition;
 import com.intendia.gwt.autorest.client.SecurityDefinition.Location;
 import com.intendia.gwt.autorest.client.SecurityDefinition.SecurityType;
+import com.intendia.gwt.autorest.client.JreResourceBuilder;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ArrayTypeName; 
 import com.squareup.javapoet.ClassName;
@@ -28,7 +29,8 @@ import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
-
+import io.reactivex.Observable;
+import io.reactivex.Single;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -52,16 +54,13 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import jsinterop.annotations.JsPackage;
 import jsinterop.annotations.JsType;
-import io.reactivex.Observable;
-import io.reactivex.Single;
 
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class.getName());
+    private static JreResourceBuilder createRequest() { return new JreResourceBuilder("https://api.apis.guru/"); }
+    public static final ApisGuru APIS_GURU = new ApisGuru_RestServiceModel(Main::createRequest);
 
-    public static final ApisGuru APIS_GURU = new ApisGuru_RestServiceModel(
-            () -> new JreResourceBuilder().path("https://api.apis.guru/"));
-
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         Observable<SpecData> spec$ = null;
         if (args.length != 1) { help(); return; }
         if (args[0].contains(":")) spec$ = loadSpec(args[0]);
@@ -159,7 +158,9 @@ public class Main {
                 @Override TypeName wrap(TypeName t) { return ArrayTypeName.of(t); }
             },
             LIST {
-                @Override TypeName wrap(TypeName t) { return ParameterizedTypeName.get(ClassName.get(List.class), t.box()); }
+                @Override TypeName wrap(TypeName t) {
+                    return ParameterizedTypeName.get(ClassName.get(List.class), t.box());
+                }
             };
             abstract TypeName wrap(TypeName t);
         }
@@ -211,9 +212,9 @@ public class Main {
             TypeSpec type() {
                 TypeSpec.Builder out = TypeSpec.classBuilder(name).addModifiers(Modifier.PUBLIC, Modifier.STATIC);
                 out.addAnnotation(AnnotationSpec.builder(JsType.class)
-                        .addMember("isNative","$L", "true")
-                        .addMember("namespace","$T.$L", JsPackage.class, "GLOBAL")
-                        .addMember("name","$S", "Object")
+                        .addMember("isNative", "$L", "true")
+                        .addMember("namespace", "$T.$L", JsPackage.class, "GLOBAL")
+                        .addMember("name", "$S", "Object")
                         .build());
                 out.addJavadoc("$L\n\n<pre>$L</pre>\n", firstNonNull(emptyToNull(schema.description), name), schema);
                 if(schema != null)
@@ -244,7 +245,7 @@ public class Main {
         }
     }
 
-    private static TypeSpec openApi2JaxRs(ClassName api, OpenApi.Doc doc) throws IOException {
+    private static TypeSpec openApi2JaxRs(ClassName api, OpenApi.Doc doc) {
         log.info(doc.info.title);
 
         Map<String, OpenApi.Parameter> parameters = firstNonNull(doc.parameters, emptyMap());
@@ -262,8 +263,10 @@ public class Main {
         TypeSpec.Builder retSpec = TypeSpec.interfaceBuilder(api)
                 .addModifiers(Modifier.PUBLIC)
                 .addAnnotation(AutoRestGwt.class)
-                .addAnnotation(annotation(SuppressWarnings.class, "unused"))
-                .addAnnotation(annotation(Path.class, (doc.basePath != null) ? doc.basePath : ""));
+                .addAnnotation(annotation(SuppressWarnings.class, "unused"));
+        if(doc.basePath != null) {
+        	retSpec.addAnnotation(annotation(Path.class, doc.basePath));
+        }
         
         if(globalSecurity != null)
         {

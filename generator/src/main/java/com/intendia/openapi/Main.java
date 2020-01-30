@@ -8,6 +8,12 @@ import static java.util.Collections.emptyMap;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.joining;
 
+import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+
 import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 import com.google.gson.Gson;
@@ -21,7 +27,6 @@ import com.intendia.gwt.autorest.client.JreResourceBuilder;
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ArrayTypeName; 
 import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
@@ -29,6 +34,7 @@ import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
+
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.io.IOException;
@@ -38,13 +44,11 @@ import java.net.HttpURLConnection;
 import java.net.URLConnection;
 import java.net.URI;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import javax.lang.model.element.Modifier;
@@ -55,10 +59,37 @@ import javax.ws.rs.QueryParam;
 import jsinterop.annotations.JsPackage;
 import jsinterop.annotations.JsType;
 
-public class Main {
+/**
+ * @goal openapi-generator Generates Api.java from supplied swagger2.json
+ */
+@Mojo(name = "generate-api")
+public class Main extends AbstractMojo {
+	@Parameter( property = "generate-api.package", defaultValue = "api" )
+    private String mojoPackage;
+	@Parameter( property = "generate-api.infile", defaultValue = "api.json" )
+    private String mojoInfile;
+	@Parameter( property = "generate-api.outpath", defaultValue = "target/generated-sources" )
+    private String mojoOutpath;
+	
+	private static String outPath = "target";
     private static final Logger log = Logger.getLogger(Main.class.getName());
+
     private static JreResourceBuilder createRequest() { return new JreResourceBuilder("https://api.apis.guru/"); }
+
     public static final ApisGuru APIS_GURU = new ApisGuru_RestServiceModel(Main::createRequest);
+
+	@Override
+	public void execute() throws MojoExecutionException, MojoFailureException {
+		log.info("generate-api:execute() - package: "+mojoPackage);
+		log.info("generate-api:execute() - infile: "+mojoInfile);
+		log.info("generate-api:execute() - outpath: "+mojoOutpath);
+		outPath = mojoOutpath;
+		
+		Observable<SpecData> spec$ = null;
+		String specStr = mojoPackage+"@file://"+mojoInfile;
+		spec$ = loadSpec(specStr);
+		spec$.subscribe(Main::generate);
+	}
 
     public static void main(String[] args) {
         Observable<SpecData> spec$ = null;
@@ -91,7 +122,7 @@ public class Main {
             ClassName jaxRsTypeName = ClassName.get(spec.name, "Api");
             TypeSpec jaxRsTypeSpec = openApi2JaxRs(jaxRsTypeName, spec.doc);
             JavaFile jaxRsFile = JavaFile.builder(jaxRsTypeName.packageName(), jaxRsTypeSpec).build();
-            jaxRsFile.writeTo(Paths.get("target"));
+			jaxRsFile.writeTo(Paths.get(outPath));
         } catch (IOException e) {
             throw Throwables.propagate(e);
         }
